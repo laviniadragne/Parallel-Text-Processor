@@ -1,0 +1,135 @@
+Nume: Dragne Lavinia-Stefana
+Grupa: 334 CA
+
+				     ALGORITMI PARALELI SI DISTRIBUITI
+			 Tema #2 - Procesarea de documente folosind paradigma Map-Reduce
+
+
+	Continutul proiectului este urmatorul:
+	
+	- pachetele: read (InputReader), process (GenericALllTasks, AllTasks, GenericProcessor),
+	map (GenericMapTask, MapTask, GenericResultMap, ResultMap), reduce (GenericReduceTask,
+ 	ReduceTask, GenericResultReduce, ResultReduce), write (OutputWriter)
+
+	- clasa Tema2
+
+	- acest fisier README.
+
+	
+	Flow-ul programului:
+
+	* Argumentele din linia de comanda sunt preluate de metoda main din clasa Tema2, 
+entry-point-ul programului. Folosind clasa InputReader, se parseaza din fisierul de input, dimensiunea
+fragmentului ce trebuie prelucrat, numarul de documente si se creeaza un vector de String-uri (docs)
+cu numele fisierelor text, ce urmeaza a fi prelucrate.
+
+	* Clasa generica si abstracta GenericAllTasks contine 3 metode abstracte: createMapTasks,
+createReduceTasks si createFinalRes si contine, practic, ordinea de implementare a operatiilor din
+paradigma de Map-Reduce. Prima metoda va popula o lista de task-uri generice de map
+(clasa GenericMapTask), cea de-a doua, pe baza rezultatelor task-urilor de map, va popula o
+lista de task-uri generice de reduce (obiecte ale clasei GenericReduceTask), iar ultima creeaza o
+lista cu rezultate finale, pe baza rezultatelor din etapa de reduce. De asemenea, este creat un
+obiect de tip ExecutorService instantiat cu numarul de workeri, primit in linia de comanda.
+
+	* Clasa AllTasks extinde GenericAllTasks, particularizand-o pentru rezultate de tip 
+ResultMap si ResultReduce. 
+
+	* Clasa generica GenericProcessor contine 2 metode, ce urmaresc procesarea listelor de task-
+uri map si reduce. Metoda processMapTasks parcurge lista de task-uri de map si da submit tuturor,
+creand o lista sincronizata (mapFutures) de rezultate de tip Future, ale fiecarui task. Astfel,
+fiecare document va avea o lista de rezultate partiale de tip Future.
+	
+	* Clasa generica si abstracta GenericMapTask contine logica operatiei de Map. Aceasta
+implementeaza interfata Callable si, gratie metodei call, intoarce rezultatul task-ului asignat.
+Functia de call citeste din documentul text, de la un anumit offset dat, un fragment de dimensiune
+dimfrag si parseaza, dupa o anumita logica textul, apeland functia parseFragment. In aceasta tema,
+logica este aceea de a elimina delimitatorii si a imparti textul, in cuvinte, tinand cont sa omitem
+primul cuvant, daca procesarea incepe in interiorul lui. Astfel, aceasta logica specifica, este
+implementata, in clasa MapTask, care extinde clasa GenericMapTask. Cuvintele sunt stocate intr-o
+lista de String-uri. 
+
+	* Pentru parsare s-a folosit functia split cu regex-ul: "\\P{LD}+", prin care
+se ignora orice nu este litera sau cifra. Pentru a elimina primul cuvant procesat sau ultimul,
+in functie de caz, am mutat cursorul la un anumit offset si am verificat in stanga (respectiv in
+dreapta) daca vecinii caracterului sunt delimitatori (daca nu sunt, inseamna ca procesarea s-ar opri
+in interiorul unui cuvant si acesta trebuie ignorat/inclus in functie de caz). 
+
+	* Functia call construieste rezultatul final apeland metoda abstracta constructMapResult,
+implementata in MapTask, prin care se parcurge lista de cuvinte parsate si se adauga intr-un dictionar.
+Logica este urmatoarea: daca lungimea cuvantului nu exista deja in dictionar, se contorizeaza toate
+cuvintele cu acea lungime si se adauga ca o pereche (key, value) - (lungime_cuvant, numar_aparitii).
+Lista se construieste parcurgand cuvintele, si la fiecare pas actualizand-o daca se gaseste unul de 
+lungime mai mare. Rezultatul returnat este de tipul unei clase ce extinde clasa generica
+GenericResultMap, adica, pentru aceasta tema, de tipul ResultMap.
+
+	* Clasa generica GenericResultMap incapsuleaza rezultatul unui task de map. Pentru tema,
+am particularizat in clasa ResultMap ca rezultatele sa fie o lista si un dictionar.
+
+	* Folosind functia processReduceTasks se da submit la task-uri de tip reduce, alocand
+pentru fiecare fisier de procesat un task. Clasa generica si abstracta GenericReduceTask implementeaza
+interfata Callable si prin metoda call() si metoda abstracta constructReduceResult() returneaza
+rezultatul unui task reduce. 
+
+	* Clasa ReduceTask, contine logica de implementare specifica pentru aceasta tema,
+extinzand clasa GenericReduceTask. Aceasta are 2 etape pentru constructia rezultatelor finale:
+combine si constructRank. In etapa de combine, se forteaza terminarea task-ului de map si obtinerea
+rezultatului executiei acestuia (promisiunii Future), aplicand metoda get().
+Astfel, inainte sa se inceapa propriu-zis etapa de combinare, se asigura ca s-a terminat etapa de
+map. 
+
+	* Ulterior, se gaseste numarul total de cuvinte din fisierul asignat, se parcurge lista de
+dictionare si lista de liste pentru acel fisier si se face merge, tinand cont, in cazul dictionarelor,
+ca daca se gasesc key-uri egale, valorile pereche se vor aduna, iar in cazul cuvintelor de lungime
+egala maxima, numarul de aparitii va creste.
+
+	* In etapa de constructRank, se parcurge dictionarul mare creat, pentru fisierul asignat si
+se calculeaza rangul, folosind seria de numere Fibonacci, calculate cu ajutorul functiei fibo.
+Numerele Fibonacci vor fi calculate o singura data, pana la indexul egal cu lungimea maxima a
+cuvintelor si vor fi retinute intr-o lista, pentru optimizarea calculelor. 
+
+	* Rezultatele task-urilor de Reduce sunt incapsulate in clasa generica GenericResultReduce,
+ce este extinsa, pentru acest caz din tema, de clasa ResultReduce.
+
+	* Clasa ResultReduce contine un dictionar si o lista finale si implementeaza interfata
+Comparable, sortand rezultatele finale prin metoda de compareTo.
+
+	* Pentru a tine cont cand s-au terminat toate task-urile si a opri ExecutorService-ul am
+folosit un contor de tip AtomicInteger (inQueue), pe care il incrementez cand adaug task-uri noi
+si il decrementez cand termin executia unui task.
+
+ 	* Rezultatele finale sunt scrise in fisierele de output, linie cu linie, folosind clasa
+OutputWriter.
+
+	* BONUS:
+	* Pentru bonus, am folosit clase generice, pentru rezultatele intoarse de task-urile
+de map si reduce, pe care le-am particularizat pentru cerintele temei si clase generice si 
+abstracte pentru logica de generare a task-urilor si operatiilor de map si reduce. 
+	* De asemenea, am folosit design pattern-ul Replicated Workers, pentru obtinerea concurentei.
+Astfel, implementarea poate fi folosita pentru orice tip de date de intrare si iesire si orice
+tip de operatii Map-Reduce si este doar aplicata specific pe cazul temei.
+
+
+	
+	
+	* Referinte:
+	- Laboratorul 7 - Modelul Replicated Workers
+	- Documentatia Oracle - Java
+	- https://howtodoinjava.com/java/collections/hashmap/merge-two-hashmaps/
+	
+ 
+
+	
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
